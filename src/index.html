@@ -1,1 +1,872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GlassWall Pro</title>
+    <style>
+        :root {
+            --glass-bg: rgba(10, 10, 12, 0.95);
+            --glass-panel: rgba(30, 30, 35, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --neon-green: #4ade80;
+            --neon-red: #f87171;
+            --neon-blue: #60a5fa;
+            --neon-purple: #c084fc;
+            --neon-gold: #fbbf24;
+            --text-main: #ffffff;
+            --text-muted: #9ca3af;
+        }
 
+        body {
+            margin: 0; padding: 0;
+            background: #050505 url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop') center/cover no-repeat fixed;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            height: 100vh; display: flex; align-items: center; justify-content: center;
+            color: var(--text-main); overflow: hidden;
+        }
+
+        /* --- Main App Container --- */
+        .app-window {
+            width: 950px; height: 750px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(50px); -webkit-backdrop-filter: blur(50px);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            box-shadow: 0 50px 100px -20px rgba(0,0,0,0.9);
+            display: flex; overflow: hidden; position: relative;
+        }
+
+        /* --- Sidebar --- */
+        .sidebar {
+            width: 80px; background: rgba(0,0,0,0.3);
+            border-right: 1px solid var(--glass-border);
+            display: flex; flex-direction: column; align-items: center; padding-top: 25px;
+            flex-shrink: 0;
+        }
+
+        .brand-icon {
+            width: 40px; height: 40px; background: linear-gradient(135deg, var(--neon-green), #065f46);
+            border-radius: 8px; margin-bottom: 40px; box-shadow: 0 0 15px rgba(74, 222, 128, 0.1);
+            transition: background 0.3s, box-shadow 0.3s;
+        }
+        .brand-icon.disabled {
+            background: linear-gradient(135deg, var(--neon-red), #7f1d1d);
+            box-shadow: 0 0 15px rgba(248, 113, 113, 0.1);
+        }
+
+        .nav-item {
+            width: 50px; height: 50px; border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 20px; color: var(--text-muted); cursor: pointer;
+            margin-bottom: 15px; transition: 0.2s; position: relative; font-family: monospace;
+        }
+        .nav-item:hover { color: white; background: rgba(255,255,255,0.05); }
+        .nav-item.active { color: var(--neon-green); background: rgba(74, 222, 128, 0.1); }
+        .nav-item.active::before {
+            content: ''; position: absolute; left: -15px; width: 4px; height: 20px;
+            background: var(--neon-green); border-radius: 0 4px 4px 0;
+        }
+
+        /* --- Main Content --- */
+        .main-content { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+        .top-bar {
+            height: 60px; border-bottom: 1px solid var(--glass-border);
+            display: flex; align-items: center; justify-content: space-between; padding: 0 30px;
+        }
+        .view-title { font-size: 16px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #ccc; }
+        
+        .global-stats { display: flex; gap: 20px; font-size: 11px; font-weight: 600; color: var(--text-muted); font-family: monospace; }
+        .stat-item span { color: white; margin-left: 5px; }
+
+        .content-scroll { flex: 1; overflow-y: auto; padding: 30px; }
+        .content-scroll::-webkit-scrollbar { width: 6px; }
+        .content-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+
+        /* --- Filter Bar --- */
+        .filter-bar { display: flex; gap: 10px; margin-bottom: 15px; }
+        .filter-input {
+            flex: 1; background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border);
+            border-radius: 6px; padding: 8px 12px; color: white; font-family: monospace; font-size: 12px; outline: none;
+        }
+        .filter-input:focus { border-color: var(--neon-green); }
+
+        /* --- Connection List & Child Processes --- */
+        .process-group { margin-bottom: 8px; }
+
+        .connection-row {
+            display: grid; grid-template-columns: 30px 40px 2fr 1fr 1fr 40px; gap: 15px; align-items: center;
+            background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border);
+            padding: 10px 15px; border-radius: 6px; transition: 0.2s; cursor: pointer; user-select: none;
+        }
+        .connection-row:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.2); }
+        .connection-row.blocked { border-left: 3px solid var(--neon-red); }
+
+        .expand-icon { color: #666; font-size: 10px; transition: transform 0.2s; text-align: center; }
+        .process-group.active .expand-icon { transform: rotate(90deg); color: white; }
+
+        .app-icon { width: 32px; height: 32px; border-radius: 6px; background: #222; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+        .col-app { display: flex; flex-direction: column; }
+        .app-name { font-weight: 700; font-size: 13px; font-family: monospace; color: #ddd; }
+        .app-detail { font-size: 11px; color: #666; margin-top: 2px; }
+        .col-dest { display: flex; align-items: center; gap: 8px; font-size: 12px; font-family: monospace; color: #888; }
+        .flag { font-size: 14px; }
+        .geo-tag { font-size: 10px; color: #888; border: 1px solid #444; padding: 1px 4px; border-radius: 3px; margin-right: 5px; }
+
+        .badge { padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; text-align: center; width: fit-content; font-family: monospace; }
+        .badge-tcp { background: rgba(96, 165, 250, 0.1); color: var(--neon-blue); border: 1px solid rgba(96, 165, 250, 0.2); }
+        .badge-udp { background: rgba(192, 132, 252, 0.1); color: var(--neon-purple); border: 1px solid rgba(192, 132, 252, 0.2); }
+
+        /* Child Container */
+        .child-container {
+            max-height: 0; overflow: hidden; transition: max-height 0.3s ease;
+            background: rgba(0,0,0,0.3); border-left: 1px solid var(--glass-border); border-right: 1px solid var(--glass-border); border-bottom: 1px solid var(--glass-border);
+            border-radius: 0 0 6px 6px; margin-top: -4px; margin-left: 10px; margin-right: 10px;
+        }
+        .process-group.active .child-container { max-height: 500px; }
+
+        .child-row { display: flex; align-items: center; padding: 8px 15px; border-bottom: 1px solid rgba(255,255,255,0.03); font-family: monospace; font-size: 12px; color: #aaa; }
+        .child-row:last-child { border-bottom: none; }
+        .child-pid { color: var(--neon-blue); width: 60px; }
+        .child-name { flex: 1; }
+        .child-status { width: 80px; color: #666; }
+        
+        .sm-btn {
+            background: transparent; border: 1px solid var(--glass-border); color: #ccc; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 10px; font-weight: 700; opacity: 0.8; transition: 0.2s; margin-left: 5px;
+        }
+        .sm-btn:hover { opacity: 1; border-color: white; color: white; }
+        .kill-btn { color: var(--neon-red); border-color: rgba(248, 113, 113, 0.3); }
+        .kill-btn:hover { background: rgba(248, 113, 113, 0.1); border-color: var(--neon-red); }
+        .block-btn { color: var(--neon-gold); border-color: rgba(251, 191, 36, 0.3); }
+        .block-btn:hover { background: rgba(251, 191, 36, 0.1); border-color: var(--neon-gold); }
+
+        .action-btn { width: 28px; height: 28px; border-radius: 4px; border: 1px solid var(--glass-border); background: transparent; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .action-btn:hover { color: white; border-color: white; }
+
+        /* --- Context Menu --- */
+        #contextMenu {
+            position: fixed; background: #1a1a1d; border: 1px solid var(--glass-border);
+            border-radius: 6px; padding: 5px; z-index: 2000; display: none; box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+            min-width: 150px;
+        }
+        .ctx-item {
+            padding: 8px 12px; cursor: pointer; font-size: 13px; color: #ccc; border-radius: 4px;
+        }
+        .ctx-item:hover { background: rgba(255,255,255,0.1); color: white; }
+        .ctx-danger { color: var(--neon-red); }
+
+        /* --- Settings Grid --- */
+        .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .setting-card { background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border); padding: 20px; border-radius: 8px; }
+        .setting-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .setting-title { font-weight: 700; font-size: 13px; text-transform: uppercase; color: #aaa; }
+
+        .ios-switch { position: relative; width: 36px; height: 20px; appearance: none; background: rgba(255,255,255,0.1); border-radius: 30px; cursor: pointer; transition: 0.3s; outline: none; }
+        .ios-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; background: #888; border-radius: 50%; transition: 0.3s; }
+        .ios-switch:checked { background: var(--neon-green); }
+        .ios-switch:checked::after { transform: translateX(16px); background: #000; }
+        .panic-switch:checked { background: var(--neon-red); }
+
+        /* Views */
+        .view-section { display: none; height: 100%; animation: fadeIn 0.2s ease; }
+        .view-section.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* Graph */
+        .graph-area { height: 150px; background: rgba(0,0,0,0.3); border-radius: 8px; margin-bottom: 20px; position: relative; overflow: hidden; border: 1px solid var(--glass-border); }
+        canvas { width: 100%; height: 100%; display: block; }
+
+        /* --- TERMINAL STYLES --- */
+        .terminal-container {
+            background: #0a0a0c; border: 1px solid #333; border-radius: 8px; height: 100%; display: flex; flex-direction: column; padding: 15px; font-family: 'Courier New', monospace; font-size: 14px; color: #ccc; box-sizing: border-box; box-shadow: inset 0 0 30px rgba(0,0,0,0.8);
+        }
+        .term-output { flex: 1; overflow-y: auto; white-space: pre-wrap; margin-bottom: 10px; scrollbar-width: thin; scrollbar-color: #333 #111; }
+        .term-line { display: flex; gap: 10px; align-items: center; }
+        .term-prompt { color: var(--neon-green); font-weight: 700; }
+        .term-input { background: transparent; border: none; color: white; flex: 1; font-family: inherit; font-size: 14px; outline: none; caret-color: var(--neon-green); }
+        .term-error { color: var(--neon-red); font-weight: 700; }
+        .term-warn { color: var(--neon-gold); }
+        .term-success { color: var(--neon-green); }
+        .term-info { color: var(--neon-blue); }
+
+        .terminal-container::before {
+            content: " "; display: block; position: absolute; top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+            z-index: 2; background-size: 100% 2px, 3px 100%; pointer-events: none;
+        }
+
+        /* --- LOCK SCREEN --- */
+        #lockOverlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(5, 5, 8, 0.95); backdrop-filter: blur(20px);
+            z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 1; pointer-events: all; transition: opacity 0.3s;
+        }
+        #lockOverlay.hidden { opacity: 0; pointer-events: none; }
+        .lock-input {
+            background: transparent; border: 1px solid var(--glass-border); border-radius: 8px; padding: 12px 20px; color: white; font-size: 16px; text-align: center; width: 250px; margin-bottom: 20px; outline: none; letter-spacing: 2px;
+        }
+        .lock-input:focus { border-color: var(--neon-green); }
+
+        /* Logs Table */
+        .logs-table { width: 100%; border-collapse: collapse; font-family: monospace; font-size: 12px; }
+        .logs-table th { text-align: left; padding: 10px; border-bottom: 1px solid var(--glass-border); color: #888; }
+        .logs-table td { padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.03); color: #ccc; }
+        .log-time { color: var(--neon-blue); }
+        .log-allow { color: var(--neon-green); }
+        .log-block { color: var(--neon-red); }
+
+    </style>
+</head>
+<body>
+
+    <!-- Hidden Context Menu -->
+    <div id="contextMenu">
+        <div class="ctx-item ctx-danger" id="ctxBlock">Block IP</div>
+        <div class="ctx-item" id="ctxKill">Kill Process</div>
+        <div class="ctx-item" id="ctxCopy">Copy IP</div>
+    </div>
+
+    <div class="app-window" id="appWindow" onclick="hideContext()">
+        
+        <!-- Lock Overlay -->
+        <div id="lockOverlay">
+            <div style="font-size: 40px; margin-bottom: 20px;">🔒</div>
+            <div id="lockTitle" style="font-size: 18px; font-weight: 700; margin-bottom: 10px;">AUTHENTICATION REQUIRED</div>
+            <div id="lockMsg" style="color: #666; font-size: 12px; margin-bottom: 30px;">Enter Admin Password to Unlock</div>
+            
+            <div id="unlockForm" style="display: flex; flex-direction: column; align-items: center;">
+                <input type="password" id="unlockPass" class="lock-input" placeholder="PASSWORD">
+                <button class="action-btn" style="width: auto; padding: 10px 30px; color: var(--neon-green); border-color: var(--neon-green);" onclick="unlockApp()">UNLOCK</button>
+            </div>
+
+            <div id="setupForm" style="display: none; flex-direction: column; align-items: center;">
+                <input type="password" id="newPass" class="lock-input" placeholder="NEW PASSWORD">
+                <input type="password" id="confirmPass" class="lock-input" placeholder="CONFIRM PASSWORD">
+                <button class="action-btn" style="width: auto; padding: 10px 30px; color: var(--neon-blue); border-color: var(--neon-blue);" onclick="setPassword()">CREATE PASSWORD</button>
+            </div>
+        </div>
+
+        <!-- Sidebar Navigation -->
+        <div class="sidebar">
+            <div class="brand-icon"></div>
+            
+            <div class="nav-item active" onclick="switchView('monitor', this)" title="Monitor">⚡</div>
+            <div class="nav-item" onclick="switchView('apps', this)" title="Apps">📦</div>
+            <div class="nav-item" onclick="switchView('terminal', this)" title="Terminal">_></div>
+            <div class="nav-item" onclick="switchView('logs', this)" title="Logs">📝</div>
+            <div class="nav-item" onclick="switchView('settings', this)" title="Global Settings">🛡️</div>
+            
+            <div style="flex:1"></div>
+            <div class="nav-item" title="Lock App Interface" onclick="manualLock()">🔒</div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            
+            <!-- Top Bar -->
+            <div class="top-bar">
+                <div class="view-title" id="pageTitle">Network Monitor</div>
+                <div class="global-stats">
+                    <div class="stat-item">BLOCKED: <span style="color:var(--neon-red)" id="blocked-count">0</span></div>
+                    <div class="stat-item">ACTIVE: <span style="color:var(--neon-green)" id="active-count">0</span></div>
+                    <div class="stat-item">PROFILE: <span style="color:var(--neon-blue)" id="profile-stat">HARDENED</span></div>
+                </div>
+            </div>
+
+            <div class="content-scroll">
+                
+                <!-- VIEW: MONITOR -->
+                <div id="view-monitor" class="view-section active">
+                    <div class="graph-area">
+                        <div style="position: absolute; top:10px; left:15px; font-size:10px; font-weight:700; color:#666; font-family: monospace;">NET.THROUGHPUT: <span id="net-val" style="color:var(--neon-green)">0 KB/s</span></div>
+                        <canvas id="trafficCanvas"></canvas>
+                    </div>
+
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; font-family: monospace;">Process Tree</div>
+                    </div>
+                    
+                    <div class="filter-bar">
+                        <input type="text" class="filter-input" placeholder="Filter by Name, PID or Protocol..." onkeyup="filterProcess(this.value)">
+                    </div>
+
+                    <div id="process-list-container"></div>
+                </div>
+
+                <!-- VIEW: APPS -->
+                <div id="view-apps" class="view-section">
+                     <div id="apps-list-container">
+                         <!-- Apps view can use similar rendering logic or specialized app rules view -->
+                         <div style="text-align: center; color: #666; padding: 50px;">App Rule Management (Coming Soon)</div>
+                     </div>
+                </div>
+
+                <!-- VIEW: TERMINAL -->
+                <div id="view-terminal" class="view-section">
+                    <div class="terminal-container" onclick="document.getElementById('cmdInput').focus()">
+                        <div id="termOutput" class="term-output">GlassWall Kernel Interface v2.4.1 [Secure Mode]
+(c) 2026 GlassWall Security. All rights reserved.
+
+Type 'help' for available commands.
+Protection Level: MAXIMUM
+</div>
+                        <div class="term-line">
+                            <span class="term-prompt">root@glasswall:~#</span>
+                            <input type="text" id="cmdInput" class="term-input" autocomplete="off" spellcheck="false">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VIEW: LOGS -->
+                <div id="view-logs" class="view-section">
+                    <table class="logs-table">
+                        <thead>
+                            <tr><th>TIME</th><th>EVENT</th><th>SOURCE</th><th>DESTINATION</th><th>PROTOCOL</th></tr>
+                        </thead>
+                        <tbody id="logs-body">
+                            <!-- Populated dynamically via printLine/logToBackend simulation -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- VIEW: SETTINGS -->
+                <div id="view-settings" class="view-section">
+                    <div class="settings-grid">
+                        
+                        <!-- Master Toggle -->
+                        <div class="setting-card" style="border-color: rgba(74, 222, 128, 0.3);">
+                            <div class="setting-header">
+                                <div class="setting-title" style="color:var(--neon-green)">Master Firewall</div>
+                                <input type="checkbox" id="masterSwitch" class="ios-switch" onchange="toggleMasterFirewall(this.checked)">
+                            </div>
+                            <div style="font-size:12px; color:var(--text-muted)">Global system firewall state. disabling leaves the system completely exposed.</div>
+                        </div>
+
+                        <!-- DNS & Networking -->
+                        <div class="setting-card" style="grid-column: span 2;">
+                            <div class="setting-header">
+                                <div class="setting-title" style="color:var(--neon-green)">Network Intelligence</div>
+                            </div>
+                            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+                                <div>
+                                    <div style="font-size:12px; color:#888; margin-bottom:5px;">DNS Provider</div>
+                                    <select id="dnsSelect" onchange="changeDns(this.value)" style="width:100%; padding:8px; background:#121212; color:white; border:1px solid #333; border-radius:4px; margin-bottom:10px;">
+                                        <option value="cloudflare">Cloudflare (1.1.1.1)</option>
+                                        <option value="quad9">Quad9 (9.9.9.9)</option>
+                                        <option value="google">Google (8.8.8.8)</option>
+                                        <option value="local">System Local</option>
+                                        <option value="custom">Custom...</option>
+                                    </select>
+                                    <input type="text" id="customDns" style="display:none; width:100%; padding:8px; background:#121212; color:white; border:1px solid #333; border-radius:4px;" placeholder="Enter IP (e.g., 10.0.0.1)">
+                                </div>
+                                <div>
+                                    <div style="font-size:12px; color:#888; margin-bottom:5px;">Blocklist Import</div>
+                                    <input type="file" id="blocklistFile" style="display:none" onchange="importBlocklist(this)">
+                                    <button class="action-btn" style="width:100%;" onclick="document.getElementById('blocklistFile').click()">
+                                        📂 Import .txt List
+                                    </button>
+                                    <div style="font-size:10px; color:#666; margin-top:5px;">Supports hosts format & plain domain lists</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Admin -->
+                        <div class="setting-card">
+                            <div class="setting-header">
+                                <div class="setting-title" style="color:var(--neon-blue)">Admin Access</div>
+                            </div>
+                            <div style="margin-bottom:15px; font-size:12px; color:#888">Change the master password used to unlock the interface.</div>
+                            <button class="action-btn" style="width:100%; border-color:var(--neon-blue); color:var(--neon-blue)" onclick="resetPasswordFlow()">CHANGE PASSWORD</button>
+                        </div>
+
+                         <!-- Auto Lock -->
+                         <div class="setting-card">
+                            <div class="setting-header">
+                                <div class="setting-title">Auto-Lock</div>
+                                <input type="checkbox" class="ios-switch" checked>
+                            </div>
+                            <div style="font-size:12px; color:#888">Automatically lock interface when window is minimized or inactive for 5 minutes.</div>
+                        </div>
+
+                        <!-- Critical -->
+                        <div class="setting-card" style="border-color: rgba(248, 113, 113, 0.3);">
+                            <div class="setting-header">
+                                <div class="setting-title" style="color:var(--neon-red)">Kill Switch</div>
+                                <input type="checkbox" class="ios-switch panic-switch" onchange="togglePanic(this.checked)">
+                            </div>
+                            <div style="font-size:12px; color:var(--text-muted)">Hard network severance. Physical layer override enabled.</div>
+                        </div>
+
+                        <!-- HaGeZi Blocklists -->
+                        <div class="setting-card">
+                            <div class="setting-header">
+                                <div class="setting-title">HaGeZi Threat Feeds</div>
+                                <div class="badge" style="background:var(--neon-purple); color:black">INTELLIGENCE</div>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                                <span style="font-size:13px; color:#ccc">Multi PRO</span>
+                                <input type="checkbox" class="ios-switch filter-toggle" checked>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                                <span style="font-size:13px; color:#ccc">Ultimate</span>
+                                <input type="checkbox" class="ios-switch filter-toggle">
+                            </div>
+                        </div>
+
+                        <!-- Custom Blocklist -->
+                        <div class="setting-card" style="grid-column: span 2;">
+                            <div class="setting-header">
+                                <div class="setting-title">Custom Rules</div>
+                            </div>
+                            <div style="display:flex; gap:10px; margin-bottom:15px;">
+                                <input type="text" id="customRuleInput" class="filter-input" placeholder="Domain or IP...">
+                                <button class="action-btn" style="width:auto; padding:0 15px; font-weight:700; color:var(--neon-red); border-color:var(--neon-red);" onclick="addCustomRule()">BLOCK</button>
+                            </div>
+                            <div id="customRuleList" style="max-height: 100px; overflow-y: auto; display: flex; flex-wrap: wrap; gap: 8px;">
+                                <div class="badge" style="background:rgba(248,113,113,0.1); color:var(--neon-red); border:1px solid rgba(248,113,113,0.2); cursor:pointer;" onclick="this.remove()">ads.tiktok.com ×</div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const isTauri = window.__TAURI__ !== undefined;
+        const invoke = isTauri ? window.__TAURI__.invoke : null;
+
+        // --- STATE MANAGEMENT ---
+        let expandedPids = new Set(); 
+        let isPaused = false;         
+        let ctxTarget = { ip: '', pid: 0 };
+        let netHistory = new Array(60).fill(0);
+
+        // --- BACKEND INTEGRATION ---
+        async function fetchLiveConnections() {
+            if (isPaused) return; 
+            if (!isTauri) return; // No mocks here
+            
+            try {
+                // 1. Fetch Connections
+                const conns = await invoke('get_live_conns');
+                renderConnections(conns); 
+                document.getElementById('active-count').innerText = conns.length;
+
+                // 2. Fetch Status & Profile 
+                const status = await invoke('get_status');
+                const switchEl = document.getElementById('masterSwitch');
+                
+                // Sync Master Switch UI with Backend
+                if (switchEl.checked !== status.active) {
+                    switchEl.checked = status.active;
+                    updateBrandStatus(status.active);
+                }
+
+                // Sync Profile Header 
+                document.getElementById('profile-stat').innerText = status.profile.toUpperCase();
+
+                // 3. Fetch Real Network Stats
+                const netStats = await invoke('get_net_stats');
+                updateGraphData(netStats.total_kbps);
+
+            } catch(e) { console.error(e); }
+        }
+
+        function renderConnections(list) {
+            const container = document.getElementById('process-list-container');
+            
+            container.innerHTML = list.map(c => {
+                const isExpanded = expandedPids.has(c.pid);
+                const flag = c.country === 'LAN' ? '🏠' : '🌐';
+                
+                return `
+                <div class="process-group ${isExpanded ? 'active' : ''}" data-pid="${c.pid}">
+                    <div class="connection-row" onclick="toggleChild(this, ${c.pid})">
+                        <div class="expand-icon">▶</div>
+                        <div class="app-icon">📦</div>
+                        <div class="col-app">
+                            <span class="app-name">${c.name}</span>
+                            <span class="app-detail">PID ${c.pid}</span>
+                        </div>
+                        <div class="col-dest">
+                             <span class="geo-tag">${c.country}</span> ${c.remote_ip}
+                        </div>
+                        <div class="badge badge-tcp">CONN</div>
+                        <!-- Action Menu Trigger -->
+                        <button class="action-btn" onclick="showContext(event, '${c.remote_ip}', ${c.pid})">⋮</button>
+                    </div>
+                    <div class="child-container">
+                        ${(c.children || []).map(child => `
+                            <div class="child-row">
+                                <span class="child-pid">${child.pid}</span>
+                                <span class="child-name">${child.name}</span>
+                                <span class="child-status">${child.status}</span>
+                                <button class="sm-btn block-btn" onclick="blockChildNet(this, ${child.pid})">BLOCK NET</button>
+                                <button class="sm-btn kill-btn" onclick="killProcess(this, ${child.pid}, '${child.name}')">KILL</button>
+                            </div>
+                        `).join('')}
+                        ${(!c.children || c.children.length === 0) ? '<div class="child-row" style="justify-content:center; opacity:0.5">No active child processes</div>' : ''}
+                    </div>
+                </div>
+            `}).join('');
+        }
+
+        // --- CONTEXT MENU LOGIC ---
+        function showContext(e, ip, pid) {
+            e.stopPropagation();
+            isPaused = true;
+            ctxTarget = { ip, pid };
+            
+            const menu = document.getElementById('contextMenu');
+            menu.style.display = 'block';
+            menu.style.left = `${e.clientX - 140}px`;
+            menu.style.top = `${e.clientY + 10}px`;
+
+            // Bind actions
+            document.getElementById('ctxBlock').onclick = () => { blockIpDirect(ip); hideContext(); };
+            document.getElementById('ctxKill').onclick = () => { killProcessSimple(pid); hideContext(); };
+            document.getElementById('ctxCopy').onclick = () => { navigator.clipboard.writeText(ip); hideContext(); };
+        }
+
+        function hideContext() {
+            document.getElementById('contextMenu').style.display = 'none';
+            setTimeout(() => isPaused = false, 500);
+        }
+
+        async function blockIpDirect(ip) {
+            if(isTauri) await invoke('block_ip', { ip });
+            printLine(`[FIREWALL] Block rule added for ${ip}`, 'term-success');
+            fetchLiveConnections();
+        }
+
+        function killProcessSimple(pid) {
+             printLine(`[!] SIGKILL sent to PID ${pid}`, 'term-warn');
+             if(isTauri) invoke('kill_process', { pid });
+        }
+
+        // --- SETTINGS LOGIC ---
+        function changeDns(val) {
+            const customInput = document.getElementById('customDns');
+            customInput.style.display = val === 'custom' ? 'block' : 'none';
+            printLine(`DNS Provider switched to: ${val.toUpperCase()}`, 'term-info');
+        }
+
+        function importBlocklist(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = async function(e) {
+                    const text = e.target.result;
+                    const lines = text.split('\n').filter(l => l.trim() && !l.startsWith('#'));
+                    const domains = lines.map(l => l.trim());
+                    
+                    if (domains.length > 0) {
+                        printLine(`[IMPORT] Parsing ${domains.length} domains...`);
+                        if (isTauri) {
+                            const success = await invoke('update_hosts_blocklist', { domains });
+                            if (success) {
+                                printLine(`[SUCCESS] Wrote ${domains.length} domains to /etc/hosts`, 'term-success');
+                                logToBackend(`Imported blocklist: ${domains.length} rules`);
+                            } else {
+                                printLine(`[ERROR] Failed to write hosts file. Run as Sudo?`, 'term-error');
+                            }
+                        }
+                    }
+                };
+                reader.readAsText(input.files[0]);
+            }
+        }
+
+        // --- PERSISTENT LOGGING ---
+        async function logToBackend(msg) {
+            const timestamp = new Date().toISOString();
+            const logEntry = `[${timestamp}] ${msg}`;
+            if(isTauri) await invoke('log_event', { event: logEntry });
+        }
+
+        function printLine(text, cssClass = '') {
+            const div = document.createElement('div');
+            div.textContent = text;
+            if(cssClass) div.className = cssClass;
+            document.getElementById('termOutput').appendChild(div);
+            document.getElementById('termOutput').scrollTop = document.getElementById('termOutput').scrollHeight;
+            
+            if (cssClass === 'term-warn' || cssClass === 'term-error' || cssClass === 'term-success') {
+                logToBackend(text);
+                // Also add to visual Logs table
+                const tbody = document.getElementById('logs-body');
+                const row = `<tr>
+                    <td class="log-time">${new Date().toLocaleTimeString()}</td>
+                    <td class="${cssClass === 'term-error' ? 'log-block' : 'log-allow'}">${cssClass.replace('term-', '').toUpperCase()}</td>
+                    <td>SYSTEM</td>
+                    <td>-</td>
+                    <td>${text}</td>
+                </tr>`;
+                tbody.insertAdjacentHTML('afterbegin', row);
+            }
+        }
+
+        // --- GRAPH LOGIC ---
+        const canvas = document.getElementById('trafficCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function updateGraphData(kbps) {
+            document.getElementById('net-val').innerText = kbps.toFixed(1) + ' KB/s';
+            netHistory.push(kbps);
+            netHistory.shift();
+        }
+
+        function resizeCanvas() {
+            if(canvas.offsetParent) {
+                canvas.width = canvas.parentElement.offsetWidth;
+                canvas.height = canvas.parentElement.offsetHeight;
+            }
+        }
+        window.onresize = resizeCanvas;
+        setTimeout(resizeCanvas, 100);
+
+        function drawGraph() {
+            if(!canvas.offsetParent) { requestAnimationFrame(drawGraph); return; }
+            const w = canvas.width;
+            const h = canvas.height;
+            
+            ctx.clearRect(0, 0, w, h);
+            ctx.beginPath();
+            ctx.moveTo(0, h);
+            
+            const maxVal = Math.max(100, ...netHistory);
+            const step = w / (netHistory.length - 1);
+            
+            for(let i = 0; i < netHistory.length; i++) {
+                const val = netHistory[i];
+                const y = h - ((val / maxVal) * h * 0.9);
+                ctx.lineTo(i * step, y);
+            }
+            
+            ctx.lineTo(w, h);
+            const gradient = ctx.createLinearGradient(0, 0, 0, h);
+            gradient.addColorStop(0, 'rgba(74, 222, 128, 0.2)');
+            gradient.addColorStop(1, 'rgba(74, 222, 128, 0.0)');
+            ctx.fillStyle = gradient;
+            ctx.fill();
+            ctx.strokeStyle = '#4ade80';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            
+            requestAnimationFrame(drawGraph);
+        }
+        drawGraph();
+
+        // --- ACTIONS & UI HELPERS ---
+        async function togglePanic(enabled) {
+            if (isTauri) {
+                await invoke('set_profile', { mode: enabled ? 'BlockAll' : 'Public' });
+                printLine(enabled ? `>>> PANIC MODE ENGAGED <<<` : `Panic mode disengaged.`, enabled ? 'term-error' : 'term-success');
+            }
+        }
+
+        async function toggleMasterFirewall(enabled) {
+            updateBrandStatus(enabled);
+            if (isTauri) {
+                await invoke('toggle_firewall', { enable: enabled });
+                printLine(enabled ? "System Firewall Enabled." : "WARNING: System Firewall Disabled.", enabled ? 'term-success' : 'term-error');
+            }
+        }
+
+        function updateBrandStatus(active) {
+            const icon = document.querySelector('.brand-icon');
+            if (active) icon.classList.remove('disabled');
+            else icon.classList.add('disabled');
+        }
+
+        function switchView(viewName, el) {
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            el.classList.add('active');
+            const titleMap = { 'monitor': 'Network Monitor', 'apps': 'Application Rules', 'terminal': 'Terminal', 'settings': 'System Policy', 'logs': 'Event Logs' };
+            document.getElementById('pageTitle').innerText = titleMap[viewName];
+            document.querySelectorAll('.view-section').forEach(v => v.classList.remove('active'));
+            document.getElementById('view-' + viewName).classList.add('active');
+            if(viewName === 'terminal') setTimeout(() => document.getElementById('cmdInput').focus(), 100);
+        }
+
+        function toggleChild(row, pid) {
+            const group = row.parentElement;
+            group.classList.toggle('active');
+            if (group.classList.contains('active')) {
+                expandedPids.add(pid);
+            } else {
+                expandedPids.delete(pid);
+            }
+        }
+
+        function filterProcess(query) {
+            const groups = document.querySelectorAll('.process-group');
+            query = query.toLowerCase();
+            groups.forEach(group => {
+                const text = group.innerText.toLowerCase();
+                group.style.display = text.includes(query) ? 'block' : 'none';
+            });
+        }
+
+        // --- AUTHENTICATION ---
+        const STORAGE_KEY = 'glasswall_auth_hash'; 
+
+        function initAuth() {
+            const storedHash = localStorage.getItem(STORAGE_KEY);
+            if (!storedHash) {
+                document.getElementById('lockTitle').innerText = "SETUP REQUIRED";
+                document.getElementById('lockMsg').innerText = "Create an Admin Password to secure GlassWall";
+                document.getElementById('unlockForm').style.display = 'none';
+                document.getElementById('setupForm').style.display = 'flex';
+            } else {
+                document.getElementById('lockTitle').innerText = "AUTHENTICATION REQUIRED";
+                document.getElementById('lockMsg').innerText = "Enter Admin Password to Unlock";
+                document.getElementById('unlockForm').style.display = 'flex';
+                document.getElementById('setupForm').style.display = 'none';
+            }
+        }
+
+        function setPassword() {
+            const p1 = document.getElementById('newPass').value;
+            const p2 = document.getElementById('confirmPass').value;
+            if (p1.length < 4) { alert("Password too short (min 4 chars)"); return; }
+            if (p1 !== p2) { alert("Passwords do not match"); return; }
+            
+            try {
+                const hash = btoa(p1); 
+                localStorage.setItem(STORAGE_KEY, hash);
+                document.getElementById('newPass').value = '';
+                document.getElementById('confirmPass').value = '';
+                initAuth();
+                alert("Password Set Successfully. Please log in.");
+            } catch (e) {
+                alert("Error setting password.");
+            }
+        }
+
+        function unlockApp() {
+            const pass = document.getElementById('unlockPass').value;
+            const storedHash = localStorage.getItem(STORAGE_KEY);
+            try {
+                if (btoa(pass) === storedHash) {
+                    document.getElementById('lockOverlay').classList.add('hidden');
+                } else {
+                    alert("ACCESS DENIED: Incorrect Password");
+                    document.getElementById('unlockPass').value = '';
+                }
+            } catch (e) {
+                alert("Invalid password format.");
+            }
+        }
+
+        function manualLock() {
+            document.getElementById('lockOverlay').classList.remove('hidden');
+            document.getElementById('unlockPass').value = '';
+            initAuth();
+        }
+
+        function resetPasswordFlow() {
+            localStorage.removeItem(STORAGE_KEY);
+            manualLock();
+        }
+
+        // --- TERMINAL COMMANDS ---
+        const cmdInput = document.getElementById('cmdInput');
+        cmdInput.addEventListener('keydown', function(e) {
+            if(e.key === 'Enter') {
+                const cmd = this.value.trim();
+                if(cmd) processCommand(cmd);
+                this.value = '';
+            }
+        });
+
+        async function processCommand(cmdRaw) {
+            const args = cmdRaw.trim().split(' ');
+            const cmd = args[0].toLowerCase();
+            const arg1 = args[1];
+
+            printLine(`root@glasswall:~# ${cmdRaw}`);
+
+            switch(cmd) {
+                case 'help':
+                    printLine(`Available: status, scan, profile <mode>, block <ip>, kill <pid>, logs, flush, lockdown, lock, clear`, 'term-info');
+                    break;
+                case 'status':
+                    printLine(`System: ONLINE\nFirewall: ${document.getElementById('masterSwitch').checked ? 'ACTIVE' : 'DISABLED'}\nProfile: ${document.getElementById('profile-stat').innerText}`, 'term-success');
+                    break;
+                case 'profile':
+                    if(!arg1) { printLine('Usage: profile <public|private|lockdown>', 'term-warn'); break; }
+                    const mode = arg1.toLowerCase();
+                    if(['public', 'private', 'lockdown'].includes(mode)) {
+                        if(isTauri) await invoke('set_profile', { mode: mode.charAt(0).toUpperCase() + mode.slice(1) });
+                        printLine(`Profile switched to: ${mode.toUpperCase()}`, 'term-success');
+                    } else printLine('Invalid profile.', 'term-error');
+                    break;
+                case 'block':
+                    if(!arg1) { printLine('Usage: block <ip>', 'term-warn'); break; }
+                    if(isTauri) await invoke('block_ip', { ip: arg1 });
+                    printLine(`[+] Rule added: DENY FROM ${arg1}`, 'term-success');
+                    break;
+                case 'kill':
+                    if(!arg1) { printLine('Usage: kill <pid>', 'term-warn'); break; }
+                    if(isTauri) await invoke('kill_process', { pid: parseInt(arg1) });
+                    printLine(`[!] SIGKILL sent to PID ${arg1}`, 'term-warn');
+                    break;
+                case 'logs':
+                    printLine(`Fetching last 5 logs...`);
+                    const logRows = document.querySelectorAll('#logs-body tr');
+                    Array.from(logRows).slice(0, 5).forEach(row => printLine(row.innerText.replace(/\t/g, ' ')));
+                    break;
+                case 'scan':
+                    printLine(`Scanning active sockets...`);
+                    fetchLiveConnections();
+                    setTimeout(() => printLine(`Scan complete.`, 'term-success'), 500);
+                    break;
+                case 'flush':
+                    printLine(`Flushing nftables ruleset...`, 'term-warn');
+                    setTimeout(() => printLine(`Rules flushed.`, 'term-success'), 800);
+                    break;
+                case 'lockdown':
+                    togglePanic(true);
+                    break;
+                case 'lock':
+                    manualLock();
+                    break;
+                case 'clear':
+                    document.getElementById('termOutput').innerHTML = '';
+                    break;
+                default:
+                    printLine(`Command not found: ${cmd}`, 'term-warn');
+            }
+        }
+
+        // --- Custom Rules UI ---
+        function addCustomRule() {
+            const input = document.getElementById('customRuleInput');
+            const list = document.getElementById('customRuleList');
+            const val = input.value.trim();
+            if(val) {
+                const tag = document.createElement('div');
+                tag.className = 'badge';
+                tag.style.background = 'rgba(248, 113, 113, 0.1)';
+                tag.style.color = 'var(--neon-red)';
+                tag.style.border = '1px solid rgba(248, 113, 113, 0.2)';
+                tag.style.cursor = 'pointer';
+                tag.innerHTML = `${val} ×`;
+                tag.onclick = function() { this.remove(); printLine(`[-] Rule removed: ${val}`, 'term-info'); };
+                list.appendChild(tag);
+                printLine(`[+] Custom Block Rule added: ${val}`, 'term-success');
+                input.value = '';
+            }
+        }
+
+        // Init
+        initAuth();
+        setInterval(fetchLiveConnections, 1000);
+        fetchLiveConnections();
+    </script>
+</body>
+</html>
